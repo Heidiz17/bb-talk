@@ -17,7 +17,6 @@
       gap: 14px;
       user-select: none;
     }
-
     #status {
       text-align: center;
       font-size: 18px;
@@ -25,7 +24,6 @@
       font-weight: bold;
       min-height: 24px;
     }
-
     #display-box {
       flex: 1;
       background: #1e1e1e;
@@ -42,7 +40,6 @@
     .text-original { font-size: 18px; color: #888; }
     .text-main { font-size: 28px; font-weight: bold; color: #00e676; line-height: 1.3; }
     .text-sub { font-size: 20px; color: #ffeb3b; line-height: 1.3; }
-
     .btn-container {
       display: flex;
       flex-direction: column;
@@ -65,7 +62,6 @@
     }
     .giant-btn:active { transform: scale(0.97); opacity: 0.9; }
     .btn-subtext { font-size: 16px; font-weight: normal; margin-top: 4px; opacity: 0.85; }
-
     .btn-master { background: linear-gradient(135deg, #2e7d32, #1b5e20); }
     .btn-worker { background: linear-gradient(135deg, #1565c0, #0d47a1); }
   </style>
@@ -125,9 +121,14 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, mode })
         });
-        return await res.json();
+        const data = await res.json();
+        if (data.error) {
+          statusDiv.innerText = "錯誤: " + data.error;
+          return null;
+        }
+        return data;
       } catch (e) {
-        console.error("Worker 連線失敗:", e);
+        statusDiv.innerText = "連線失敗，請檢查網絡";
         return null;
       }
     }
@@ -145,15 +146,9 @@
         const result = await callWorkerTranslate(spoken, 'to_worker');
 
         if (result && result.en) {
-          displayBox.innerHTML = `
-            <div class="text-original">師傅講：「${spoken}」</div>
-            <div class="text-main">🇺🇸 ${result.en}</div>
-            <div class="text-sub">🇵🇭 ${result.tl || ''}</div>
-          `;
+          displayBox.innerHTML = '<div class="text-original">師傅講：「' + spoken + '」</div><div class="text-main">🇺🇸 ' + result.en + '</div><div class="text-sub">🇵🇭 ' + (result.tl || '') + '</div>';
           statusDiv.innerText = "🔊 正在朗讀英文...";
           speak(result.en, 'en-US');
-        } else {
-          statusDiv.innerText = "連線出錯，請再試一次！";
         }
       };
 
@@ -175,14 +170,9 @@
         const result = await callWorkerTranslate(spoken, 'to_canto');
 
         if (result && result.canto) {
-          displayBox.innerHTML = `
-            <div class="text-original">姐姐講："${spoken}"</div>
-            <div class="text-main" style="color: #00d2ff;">廣東話：${result.canto}</div>
-          `;
+          displayBox.innerHTML = '<div class="text-original">姐姐講："' + spoken + '"</div><div class="text-main" style="color: #00d2ff;">廣東話：' + result.canto + '</div>';
           statusDiv.innerText = "🔊 正在朗讀廣東話...";
           speak(result.canto, 'zh-HK');
-        } else {
-          statusDiv.innerText = "連線出錯，請再試一次！";
         }
       };
 
