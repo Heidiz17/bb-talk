@@ -1,13 +1,13 @@
 {
-  "name": "湊BB翻譯神器",
-  "short_name": "湊BB神器",
+  "name": "湊BB翻譯神器 (孖女版)",
+  "short_name": "湊孖女神器",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#14171a",
-  "theme_color": "#ffca28",
+  "theme_color": "#ff80ab",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%23ffca28'/><text y='72' x='15' font-size='70'>👶</text></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='25' fill='%23ff80ab'/><text y='45' x='10' font-size='38'>👶👶</text><text y='85' x='18' font-size='35'>🍼🍼</text></svg>",
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
