@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>地盤溝通神器</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #121212;
+      color: #ffffff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 14px;
+      user-select: none;
+    }
+
+    /* 頂部即時狀態提示 */
+    #status {
+      text-align: center;
+      font-size: 18px;
+      color: #aaa;
+      font-weight: bold;
+      min-height: 24px;
+    }
+
+    /* 中間大字顯示區 */
+    #display-box {
+      flex: 1;
+      background: #1e1e1e;
+      border: 2px solid #333;
+      border-radius: 18px;
+      padding: 18px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      text-align: center;
+      gap: 12px;
+    }
+    .text-original { font-size: 20px; color: #888; }
+    .text-main { font-size: 30px; font-weight: bold; color: #00e676; line-height: 1.3; }
+    .text-sub { font-size: 22px; color: #ffeb3b; line-height: 1.3; }
+
+    /* 下方兩粒巨型按鈕 */
+    .btn-container {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .giant-btn {
+      width: 100%;
+      height: 120px;
+      border: none;
+      border-radius: 20px;
+      font-size: 28px;
+      font-weight: 900;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+      cursor: pointer;
+    }
+    .giant-btn:active { transform: scale(0.97); opacity: 0.9; }
+    .btn-subtext { font-size: 16px; font-weight: normal; margin-top: 4px; opacity: 0.85; }
+
+    /* 師傅掣：綠色 */
+    .btn-master { background: linear-gradient(135deg, #2e7d32, #1b5e20); }
+    /* 姐姐掣：藍色 */
+    .btn-worker { background: linear-gradient(135deg, #1565c0, #0d47a1); }
+  </style>
+</head>
+<body>
+
+  <div id="status">準備就緒，點擊下方掣講嘢</div>
+
+  <div id="display-box">
+    <div class="text-original">點擊下方按鈕開始</div>
+    <div class="text-main">綠掣：師傅講</div>
+    <div class="text-sub">藍掣：姐姐講</div>
+  </div>
+
+  <div class="btn-container">
+    <!-- 師傅專用綠掣 -->
+    <button class="giant-btn btn-master" onclick="handleMaster()">
+      🟢 師傅講嘢 (我講)
+      <span class="btn-subtext">自動轉英文 + 菲律賓話並讀出</span>
+    </button>
+
+    <!-- 姐姐專用藍掣 -->
+    <button class="giant-btn btn-worker" onclick="handleWorker()">
+      🔵 姐姐講嘢 (佢講)
+      <span class="btn-subtext">自動轉廣東話並讀出</span>
+    </button>
+  </div>
+
+  <script>
+    const statusDiv = document.getElementById('status');
+    const displayBox = document.getElementById('display-box');
+
+    // 瀏覽器語音輸入 (STT)
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognizer = null;
+
+    if (SpeechRecognition) {
+      recognizer = new SpeechRecognition();
+      recognizer.continuous = false;
+      recognizer.interimResults = false;
+    } else {
+      alert("請用 Android Chrome 或 iPhone Safari 開啟，以支援語音功能！");
+    }
+
+    // 免費翻譯連線 API
+    async function translate(text, from, to) {
+      try {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${from}|${to}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        return data.responseData.translatedText || text;
+      } catch (e) {
+        return "翻譯失敗，請檢查網絡";
+      }
+    }
+
+    // 發聲朗讀 (TTS)
+    function speak(text, lang) {
+      if (!('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = lang;
+      utter.rate = 0.95;
+      window.speechSynthesis.speak(utter);
+    }
+
+    // 師傅撳綠掣 (講廣東話)
+    function handleMaster() {
+      if (!recognizer) return;
+      recognizer.lang = 'zh-HK';
+      statusDiv.innerText = "🎧 師傅請講嘢...";
+      
+      recognizer.start();
+
+      recognizer.onresult = async (event) => {
+        const spoken = event.results[0][0].transcript;
+        statusDiv.innerText = "⏳ 翻譯中...";
+
+        // 同步向 API 要英文同菲律賓話 (Tagalog)
+        const [engText, tagalogText] = await Promise.all([
+          translate(spoken, 'zh-HK', 'en'),
+          translate(spoken, 'zh-HK', 'tl')
+        ]);
+
+        displayBox.innerHTML = `
+          <div class="text-original">師傅講：「${spoken}」</div>
+          <div class="text-main">🇺🇸 ${engText}</div>
+          <div class="text-sub">🇵🇭 ${tagalogText}</div>
+        `;
+
+        statusDiv.innerText = "🔊 正在朗讀英文...";
+        speak(engText, 'en-US');
+      };
+
+      recognizer.onerror = () => {
+        statusDiv.innerText = "未聽清楚，請再撳一次！";
+      };
+    }
+
+    // 姐姐撳藍掣 (講英文)
+    function handleWorker() {
+      if (!recognizer) return;
+      recognizer.lang = 'en-US';
+      statusDiv.innerText = "🎧 Listening to worker...";
+      
+      recognizer.start();
+
+      recognizer.onresult = async (event) => {
+        const spoken = event.results[0][0].transcript;
+        statusDiv.innerText = "⏳ 翻譯緊廣東話...";
+
+        const cantoText = await translate(spoken, 'en', 'zh-HK');
+
+        displayBox.innerHTML = `
+          <div class="text-original">姐姐講："${spoken}"</div>
+          <div class="text-main" style="color: #00d2ff;">廣東話：${cantoText}</div>
+        `;
+
+        statusDiv.innerText = "🔊 正在朗讀廣東話...";
+        speak(cantoText, 'zh-HK');
+      };
+
+      recognizer.onerror = () => {
+        statusDiv.innerText = "未聽清楚，請再撳一次！";
+      };
+    }
+  </script>
+</body>
+</html>
