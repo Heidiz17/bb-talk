@@ -10,6 +10,7 @@
   <meta name="application-name" content="湊孖女神器">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#1a202c">
 
   <style>
@@ -24,6 +25,7 @@
       padding: 16px;
       gap: 12px;
       user-select: none;
+      -webkit-user-select: none;
     }
 
     .app-header {
@@ -63,9 +65,23 @@
       gap: 12px;
     }
     .text-original { font-size: 16px; color: #9e9e9e; }
-    .text-en { font-size: 28px; font-weight: bold; color: #00e676; line-height: 1.3; }
+    .text-en { font-size: 26px; font-weight: bold; color: #00e676; line-height: 1.3; }
     .text-tl { font-size: 20px; color: #ffd54f; line-height: 1.3; }
-    .text-canto { font-size: 28px; font-weight: bold; color: #40c4ff; line-height: 1.3; }
+    .text-canto { font-size: 26px; font-weight: bold; color: #40c4ff; line-height: 1.3; }
+
+    .replay-btn {
+      margin-top: 10px;
+      background: #374151;
+      border: 1px solid #4b5563;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 12px;
+      font-size: 16px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
 
     .btn-container {
       display: flex;
@@ -84,6 +100,7 @@
       justify-content: center;
       box-shadow: 0 6px 16px rgba(0,0,0,0.4);
       cursor: pointer;
+      touch-action: manipulation;
     }
     .action-btn:active { transform: scale(0.97); }
 
@@ -117,12 +134,12 @@
   </div>
 
   <div class="btn-container">
-    <button class="action-btn btn-master" onclick="handleMaster()">
+    <button class="action-btn btn-master" id="btn-master" onclick="handleMaster()">
       🟢 師傅講嘢 (我講)
       <span class="btn-subtext">講廣東話 ➔ 自動讀出英文+菲語</span>
     </button>
 
-    <button class="action-btn btn-worker" onclick="handleWorker()">
+    <button class="action-btn btn-worker" id="btn-worker" onclick="handleWorker()">
       🔵 姐姐講嘢 (佢講)
       <span class="btn-subtext">Worker speaks ➔ 自動讀出廣東話</span>
     </button>
@@ -133,7 +150,6 @@
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
 
-    // 已填入你全新專屬的湊 BB Worker 網址
     const WORKER_URL = "https://throbbing-thunder-3e04happy-baby-translator.stream-hub-th.workers.dev";
 
     const statusDiv = document.getElementById('status');
@@ -148,13 +164,42 @@
       recognizer.interimResults = false;
     }
 
+    // 核心優化：iOS PWA 音效解鎖（必須在點擊瞬間執行）
+    let audioCtx = null;
+    function unlockIOSAudio() {
+      // 1. 解鎖 Web Audio Context
+      try {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+      } catch (e) {}
+
+      // 2. 解鎖 SpeechSynthesis 引擎（播一個極短靜音）
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const silent = new SpeechSynthesisUtterance(' ');
+        silent.volume = 0.01;
+        silent.rate = 10;
+        window.speechSynthesis.speak(silent);
+      }
+    }
+
     function speak(text, lang) {
       if (!('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
+
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = lang;
       utter.rate = 0.95;
-      window.speechSynthesis.speak(utter);
+      utter.volume = 1.0;
+
+      // 兼容 iOS 佇列卡住問題
+      setTimeout(() => {
+        window.speechSynthesis.speak(utter);
+      }, 50);
     }
 
     async function callWorker(payload) {
@@ -175,10 +220,24 @@
 
     // 師傅廣東話 ➔ 英文 + 菲律賓語
     function handleMaster() {
-      if (!recognizer) return alert("請使用 Chrome 開啟語音功能！");
+      unlockIOSAudio();
+
+      if (!recognizer) {
+        statusDiv.innerText = "⚠️ 此瀏覽器不支援語音識別";
+        alert("此模式尚未支援語音辨識，請使用 Chrome 或更新 iOS 系統至最新版！");
+        return;
+      }
+
       recognizer.lang = 'zh-HK';
       statusDiv.innerText = "🎧 師傅請講廣東話...";
-      recognizer.start();
+      
+      try {
+        recognizer.start();
+      } catch (err) {
+        // 防止連續點擊重複 start 報錯
+        recognizer.stop();
+        setTimeout(() => recognizer.start(), 150);
+      }
 
       recognizer.onresult = async (event) => {
         const spoken = event.results[0][0].transcript;
@@ -194,10 +253,12 @@
         }
 
         if (result && result.en) {
+          const safeEn = encodeURIComponent(result.en);
           displayBox.innerHTML = 
             '<div class="text-original">師傅講：「' + spoken + '」</div>' +
             '<div class="text-en">🇺🇸 ' + result.en + '</div>' +
-            '<div class="text-tl">🇵🇭 ' + (result.tl || '') + '</div>';
+            '<div class="text-tl">🇵🇭 ' + (result.tl || '') + '</div>' +
+            '<button class="replay-btn" onclick="speak(decodeURIComponent(\'' + safeEn + '\'), \'en-US\')">🔊 重播英文</button>';
           statusDiv.innerText = "🔊 正在朗讀英文...";
           speak(result.en, 'en-US');
         } else {
@@ -205,17 +266,30 @@
         }
       };
 
-      recognizer.onerror = () => { 
+      recognizer.onerror = (e) => { 
         statusDiv.innerText = "語音識別未收到，請再試！"; 
       };
     }
 
     // 姐姐英文 ➔ 廣東話
     function handleWorker() {
-      if (!recognizer) return alert("請使用 Chrome 開啟語音功能！");
+      unlockIOSAudio();
+
+      if (!recognizer) {
+        statusDiv.innerText = "⚠️ This browser does not support Speech Recognition";
+        alert("Speech Recognition not supported in this mode. Please use Chrome!");
+        return;
+      }
+
       recognizer.lang = 'en-US';
       statusDiv.innerText = "🎧 Please speak English...";
-      recognizer.start();
+      
+      try {
+        recognizer.start();
+      } catch (err) {
+        recognizer.stop();
+        setTimeout(() => recognizer.start(), 150);
+      }
 
       recognizer.onresult = async (event) => {
         const spoken = event.results[0][0].transcript;
@@ -231,9 +305,11 @@
         }
 
         if (result && result.canto) {
+          const safeCanto = encodeURIComponent(result.canto);
           displayBox.innerHTML = 
             '<div class="text-original">Worker: "' + spoken + '"</div>' +
-            '<div class="text-canto">廣東話：' + result.canto + '</div>';
+            '<div class="text-canto">廣東話：' + result.canto + '</div>' +
+            '<button class="replay-btn" onclick="speak(decodeURIComponent(\'' + safeCanto + '\'), \'zh-HK\')">🔊 重播廣東話</button>';
           statusDiv.innerText = "🔊 正在朗讀廣東話...";
           speak(result.canto, 'zh-HK');
         } else {
@@ -241,7 +317,7 @@
         }
       };
 
-      recognizer.onerror = () => { 
+      recognizer.onerror = (e) => { 
         statusDiv.innerText = "Could not hear, please try again!"; 
       };
     }
